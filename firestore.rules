@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isActiveAdmin() {
+      return request.auth != null
+        && exists(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.role == 'admin'
+        && get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.active == true;
+    }
+
+    match /admins/{adminId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == adminId;
+
+      allow write: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isActiveAdmin();
+
+      allow update: if isActiveAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt']);
+
+      allow create, delete: if false;
+    }
+
+    match /firms/{firmId} {
+      allow read: if isActiveAdmin();
+      allow write: if false;
+    }
+
+    match /professionals/{professionalId} {
+      allow read: if isActiveAdmin();
+
+      allow update: if isActiveAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['boraqsVerified', 'updatedAt']);
+
+      allow create, delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow read: if isActiveAdmin();
+      allow write: if false;
+    }
+
+    match /bids/{bidId} {
+      allow read: if isActiveAdmin();
+      allow write: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isActiveAdmin();
+      allow write: if false;
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow read: if isActiveAdmin();
+      allow write: if false;
+    }
+
+    match /disputes/{disputeId} {
+      allow read: if isActiveAdmin();
+      allow write: if false;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if isActiveAdmin();
+      allow write: if false;
+    }
+  }
+}
