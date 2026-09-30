@@ -1,30 +1,173 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
 import DataTable from '@/components/DataTable';
 import Badge from '@/components/Badge';
-import {
-  disputes as initialDisputes,
-  AdminDispute,
-} from '@/lib/mockData';
 import { formatKsh } from '@/lib/format';
 
-export default function DisputesPage() {
-  const [disputes, setDisputes] =
-    useState<AdminDispute[]>(initialDisputes);
+import {
+  FirestoreDispute,
+  getDisputes,
+} from '@/lib/firestore/disputes';
 
-  const updateDisputeStatus = (
-    id: string,
-    status: AdminDispute['status']
-  ) => {
-    setDisputes((currentDisputes) =>
-      currentDisputes.map((dispute) =>
-        dispute.id === id
-          ? { ...dispute, status }
-          : dispute
-      )
+import {
+  FirestoreProject,
+  getProjects,
+} from '@/lib/firestore/projects';
+
+import {
+  FirestoreProfessional,
+  getProfessionals,
+} from '@/lib/firestore/professionals';
+
+import {
+  FirestoreUser,
+  getUsers,
+} from '@/lib/firestore/users';
+
+type DisputeRow = FirestoreDispute & {
+  projectTitle: string;
+  clientName: string;
+  professionalName: string;
+};
+
+export default function DisputesPage() {
+  const [disputes, setDisputes] = useState<
+    DisputeRow[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function loadDisputes() {
+      try {
+        setLoading(true);
+        setError('');
+
+        const [
+          disputeData,
+          projectData,
+          professionalData,
+          userData,
+        ] = await Promise.all([
+          getDisputes(),
+          getProjects(),
+          getProfessionals(),
+          getUsers(),
+        ]);
+
+        const projectMap = new Map<
+          string,
+          FirestoreProject
+        >(
+          projectData.map((project) => [
+            project.id,
+            project,
+          ])
+        );
+
+        const userMap = new Map<
+          string,
+          FirestoreUser
+        >(
+          userData.map((user) => [
+            user.id,
+            user,
+          ])
+        );
+
+        const professionalMap = new Map<
+          string,
+          FirestoreProfessional
+        >(
+          professionalData.map((professional) => [
+            professional.id,
+            professional,
+          ])
+        );
+
+        const rows: DisputeRow[] =
+          disputeData.map((dispute) => {
+            const project = projectMap.get(
+              dispute.projectId
+            );
+
+            const client = userMap.get(
+              dispute.clientId
+            );
+
+            const professional =
+              professionalMap.get(
+                dispute.professionalId
+              );
+
+            const professionalUser =
+              professional
+                ? userMap.get(
+                    professional.userId
+                  )
+                : undefined;
+
+            return {
+              ...dispute,
+              projectTitle:
+                project?.title ??
+                'Unknown project',
+              clientName:
+                client?.fullName ??
+                'Unknown client',
+              professionalName:
+                professionalUser?.fullName ??
+                'Unknown professional',
+            };
+          });
+
+        setDisputes(rows);
+      } catch (err) {
+        console.error(
+          'Failed to load disputes:',
+          err
+        );
+
+        setError(
+          'Unable to load disputes. Please check your Firebase permissions and dispute data.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDisputes();
+  }, []);
+
+  if (loading) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-slateDark">
+          Disputes
+        </h1>
+
+        <p className="text-sm text-slate-500 mt-1">
+          Loading disputes...
+        </p>
+      </div>
     );
-  };
+  }
+
+  if (error) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-slateDark">
+          Disputes
+        </h1>
+
+        <p className="text-sm text-red-600 mt-4">
+          {error}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -33,8 +176,8 @@ export default function DisputesPage() {
       </h1>
 
       <p className="text-sm text-slate-500 mt-1">
-        Case status flows: Open → Under Review → Resolved. Escrow funds
-        stay held until a ruling is issued.
+        Case status flows: Open → Under Review → Resolved.
+        Escrow funds stay held until a ruling is issued.
       </p>
 
       <div className="mt-6">
@@ -42,92 +185,67 @@ export default function DisputesPage() {
           columns={[
             {
               header: 'Case',
-              render: (d) => (
-                <span className="font-medium">{d.caseId}</span>
+              render: (dispute) => (
+                <span className="font-medium">
+                  {dispute.caseId}
+                </span>
               ),
             },
             {
               header: 'Project',
-              render: (d) => d.projectTitle,
+              render: (dispute) =>
+                dispute.projectTitle,
             },
             {
               header: 'Client',
-              render: (d) => d.clientName,
+              render: (dispute) =>
+                dispute.clientName,
             },
             {
               header: 'Architect',
-              render: (d) => d.architectName,
+              render: (dispute) =>
+                dispute.professionalName,
             },
             {
               header: 'Issue Type',
-              render: (d) => d.issueType,
+              render: (dispute) =>
+                dispute.issueType,
             },
             {
               header: 'Escrow Held',
-              render: (d) => formatKsh(d.escrowAmountKsh),
+              render: (dispute) =>
+                formatKsh(
+                  dispute.escrowAmountKsh
+                ),
             },
             {
               header: 'Status',
-              render: (d) => <Badge label={d.status} />,
+              render: (dispute) => (
+                <Badge
+                  label={
+                    dispute.status ===
+                    'under_review'
+                      ? 'Under Review'
+                      : dispute.status ===
+                          'resolved'
+                        ? 'Resolved'
+                        : 'Open'
+                  }
+                />
+              ),
             },
             {
-              header: 'Action',
-              render: (d) => (
-                <div className="flex gap-2">
-                  {d.status !== 'Under Review' &&
-                    d.status !== 'Resolved' && (
-                      <button
-                        onClick={() =>
-                          updateDisputeStatus(
-                            d.id,
-                            'Under Review'
-                          )
-                        }
-                        className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold"
-                      >
-                        Review
-                      </button>
-                    )}
-
-                  {d.status !== 'Resolved' && (
-                    <button
-                      onClick={() =>
-                        updateDisputeStatus(
-                          d.id,
-                          'Resolved'
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold"
-                    >
-                      Resolve
-                    </button>
-                  )}
-                </div>
+              header: 'Description',
+              render: (dispute) => (
+                <span className="text-sm text-slate-600">
+                  {dispute.description}
+                </span>
               ),
             },
           ]}
           rows={disputes}
         />
       </div>
-
-      {disputes.map((d) => (
-        <div
-          key={d.id}
-          className="mt-4 bg-white border border-slate-200 rounded-xl p-4"
-        >
-          <p className="text-sm font-bold text-slateDark">
-            {d.caseId} - {d.projectTitle}
-          </p>
-
-          <p className="text-sm text-slate-600 mt-1 italic">
-            "{d.description}"
-          </p>
-
-          <p className="text-xs text-slate-400 mt-2">
-            Current status: {d.status}
-          </p>
-        </div>
-      ))}
     </div>
   );
 }
