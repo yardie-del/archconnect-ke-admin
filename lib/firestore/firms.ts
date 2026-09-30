@@ -1,8 +1,6 @@
 import {
   collection,
   getDocs,
-  orderBy,
-  query,
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase';
@@ -19,15 +17,13 @@ export interface FirestoreFirm {
 const firmsCollection = collection(db, 'firms');
 
 export async function getFirms(): Promise<FirestoreFirm[]> {
-  const firmsQuery = query(
-    firmsCollection,
-    orderBy('name')
-  );
-
-  const snapshot = await getDocs(firmsQuery);
-
-  return snapshot.docs.map((document) => ({
+  const snapshot = await getDocs(firmsCollection);
+  const firms = snapshot.docs.map((document) => ({
     id: document.id,
     ...(document.data() as Omit<FirestoreFirm, 'id'>),
   }));
+
+  return firms.sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
 }
