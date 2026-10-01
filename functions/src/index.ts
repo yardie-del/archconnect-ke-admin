@@ -155,3 +155,113 @@ export const updateProfessionalVerification = onCall(async (request) => {
     boraqsVerified,
   };
 });
+export const createProject = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "You must be signed in."
+    );
+  }
+
+  const userRef = db.doc(`users/${request.auth.uid}`);
+  const userSnap = await userRef.get();
+
+  if (!userSnap.exists) {
+    throw new HttpsError(
+      "not-found",
+      "User profile not found."
+    );
+  }
+
+  const userData = userSnap.data();
+
+  if (
+    userData?.role !== "client" ||
+    userData?.status !== "active"
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only active clients can create projects."
+    );
+  }
+
+  const title = request.data?.title;
+  const category = request.data?.category;
+  const location = request.data?.location;
+  const budgetMinKsh = request.data?.budgetMinKsh;
+  const budgetMaxKsh = request.data?.budgetMaxKsh;
+
+  if (
+    typeof title !== "string" ||
+    title.trim().length === 0 ||
+    title.trim().length > 200
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A valid project title is required."
+    );
+  }
+
+  if (
+    typeof category !== "string" ||
+    category.trim().length === 0 ||
+    category.trim().length > 100
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A valid project category is required."
+    );
+  }
+
+  if (
+    typeof location !== "string" ||
+    location.trim().length === 0 ||
+    location.trim().length > 200
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A valid project location is required."
+    );
+  }
+
+  if (
+    typeof budgetMinKsh !== "number" ||
+    !Number.isFinite(budgetMinKsh) ||
+    budgetMinKsh <= 0
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "budgetMinKsh must be a positive number."
+    );
+  }
+
+  if (
+    typeof budgetMaxKsh !== "number" ||
+    !Number.isFinite(budgetMaxKsh) ||
+    budgetMaxKsh < budgetMinKsh
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "budgetMaxKsh must be greater than or equal to budgetMinKsh."
+    );
+  }
+
+  const projectRef = db.collection("projects").doc();
+
+  await projectRef.set({
+    title: title.trim(),
+    clientId: request.auth.uid,
+    category: category.trim(),
+    location: location.trim(),
+    budgetMinKsh,
+    budgetMaxKsh,
+    status: "open",
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    success: true,
+    projectId: projectRef.id,
+  };
+});
