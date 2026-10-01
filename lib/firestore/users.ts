@@ -1,14 +1,13 @@
 import {
   collection,
-  doc,
   getDocs,
   orderBy,
   query,
-  serverTimestamp,
-  updateDoc,
 } from 'firebase/firestore';
 
-import { db } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+
+import { db, functions } from '@/lib/firebase';
 
 export type UserRole = 'client' | 'professional' | 'admin';
 export type UserStatus = 'active' | 'suspended';
@@ -46,10 +45,19 @@ export async function updateUserStatus(
   userId: string,
   status: UserStatus
 ) {
-  const userRef = doc(db, 'users', userId);
+  const updateUserStatusFn = httpsCallable<
+    { userId: string; status: UserStatus },
+    {
+      success: boolean;
+      userId: string;
+      status: UserStatus;
+    }
+  >(functions, 'updateUserStatus');
 
-  await updateDoc(userRef, {
+  const result = await updateUserStatusFn({
+    userId,
     status,
-    updatedAt: serverTimestamp(),
   });
+
+  return result.data;
 }
