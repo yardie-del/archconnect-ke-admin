@@ -1,14 +1,13 @@
 import {
   collection,
-  doc,
   getDocs,
   orderBy,
   query,
-  serverTimestamp,
-  updateDoc,
 } from 'firebase/firestore';
 
-import { db } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+
+import { db, functions } from '@/lib/firebase';
 
 export type ProfessionalType =
   | 'architect'
@@ -55,14 +54,22 @@ export async function updateProfessionalVerification(
   professionalId: string,
   boraqsVerified: boolean
 ) {
-  const professionalRef = doc(
-    db,
-    'professionals',
-    professionalId
-  );
+  const updateProfessionalVerificationFn = httpsCallable<
+    {
+      professionalId: string;
+      boraqsVerified: boolean;
+    },
+    {
+      success: boolean;
+      professionalId: string;
+      boraqsVerified: boolean;
+    }
+  >(functions, 'updateProfessionalVerification');
 
-  await updateDoc(professionalRef, {
+  const result = await updateProfessionalVerificationFn({
+    professionalId,
     boraqsVerified,
-    updatedAt: serverTimestamp(),
   });
+
+  return result.data;
 }

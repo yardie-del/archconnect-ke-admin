@@ -87,3 +87,71 @@ export const updateUserStatus = onCall(async (request) => {
     status,
   };
 });
+
+export const updateProfessionalVerification = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "You must be signed in."
+    );
+  }
+
+  const adminRef = db.doc(`admins/${request.auth.uid}`);
+  const adminSnap = await adminRef.get();
+
+  if (!adminSnap.exists) {
+    throw new HttpsError(
+      "permission-denied",
+      "You are not authorized as an admin."
+    );
+  }
+
+  const adminData = adminSnap.data();
+
+  if (
+    adminData?.role !== "admin" ||
+    adminData?.active !== true
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "Your admin account is inactive or unauthorized."
+    );
+  }
+
+  const professionalId = request.data?.professionalId;
+  const boraqsVerified = request.data?.boraqsVerified;
+
+  if (
+    typeof professionalId !== "string" ||
+    typeof boraqsVerified !== "boolean"
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "professionalId and boraqsVerified are required."
+    );
+  }
+
+  const professionalRef = db.doc(
+    `professionals/${professionalId}`
+  );
+
+  const professionalSnap = await professionalRef.get();
+
+  if (!professionalSnap.exists) {
+    throw new HttpsError(
+      "not-found",
+      "Professional not found."
+    );
+  }
+
+  await professionalRef.update({
+    boraqsVerified,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    success: true,
+    professionalId,
+    boraqsVerified,
+  };
+});
